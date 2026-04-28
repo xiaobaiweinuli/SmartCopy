@@ -98,6 +98,12 @@ Future<void> main(List<String> args) async {
       await windowManager.show();
       await windowManager.focus();
     }
+    // 确保窗口可见性（防止窗口状态保存问题）
+    await Future.delayed(const Duration(milliseconds: 100));
+    if (!minimized) {
+      await windowManager.show();
+      await windowManager.focus();
+    }
   });
 
   // ── 全局热键管理器 ─────────────────────────────────────────

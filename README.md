@@ -101,8 +101,7 @@ git push origin v1.0.0
 ```
 
 2. 或在 GitHub Actions 页面手动触发「Build and Release SmartCopy」工作流
-3. 自动创建 Release 并上传 ZIP 压缩包！
-```
+
 ---
 
 ## 📋 过滤规则语法
@@ -134,6 +133,3 @@ git push origin v1.0.0
 | `flutter_animate` | 精美动画效果 |
 | `charset` | 多编码字符集解码（用于 Robocopy 输出解析） |
 
----
-
-SmartCopy 是一款专为开发者和内容创作者设计的 Windows 文件管理增强工具，通过智能黑名单过滤大幅减少无效文件的复制，让项目迁移、备份和部署更加高效精准。
