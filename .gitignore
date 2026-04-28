@@ -1,0 +1,23 @@
+# IDE 相关
+.idea/
+smartcopy.iml
+
+# Flutter 相关
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+.metadata
+
+# 构建相关
+build/
+*.ps1
+attention.md
+daiyouhua.md
+
+# 本地数据和日志
+data/
+logs/
+
+# 日志文件
+*.log
+windows/flutter/ephemeral/

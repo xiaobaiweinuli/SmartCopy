@@ -1,0 +1,72 @@
+name: Build and Release SmartCopy
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch: # 允许手动触发
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.22.0'
+          channel: 'stable'
+          cache: true
+
+      - name: Get dependencies
+        run: flutter pub get
+
+      - name: Build Windows app
+        run: flutter build windows --release
+
+      - name: Prepare release package
+        id: prepare
+        shell: pwsh
+        run: |
+          $version = if ($env:GITHUB_REF -match 'refs/tags/v(.*)') { $matches[1] } else { 'dev' }
+          $packageName = "SmartCopy_${version}_Windows_x64"
+          $sourceDir = "build\windows\x64\runner\Release"
+          $destDir = "release\$packageName"
+          
+          # 创建目标目录并复制文件
+          New-Item -ItemType Directory -Path $destDir -Force
+          Copy-Item -Path "$sourceDir\*" -Destination $destDir -Recurse
+          
+          # 创建 ZIP 压缩包
+          $zipPath = "release\${packageName}.zip"
+          Compress-Archive -Path "$destDir\*" -DestinationPath $zipPath -Force
+          
+          echo "package_path=$zipPath" >> $env:GITHUB_OUTPUT
+          echo "package_name=${packageName}.zip" >> $env:GITHUB_OUTPUT
+          echo "version=$version" >> $env:GITHUB_OUTPUT
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v1
+        if: startsWith(github.ref, 'refs/tags/')
+        with:
+          files: ${{ steps.prepare.outputs.package_path }}
+          name: SmartCopy ${{ steps.prepare.outputs.version }}
+          draft: false
+          prerelease: false
+          body: |
+            # SmartCopy ${{ steps.prepare.outputs.version }}
+            
+            ## 安装使用
+            - 下载 `SmartCopy_${{ steps.prepare.outputs.version }}_Windows_x64.zip`
+            - 解压到任意文件夹
+            - 双击 `smartcopy.exe` 运行
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.prepare.outputs.package_name }}
+          path: ${{ steps.prepare.outputs.package_path }}
