@@ -13,7 +13,7 @@ build/
 *.ps1
 attention.md
 daiyouhua.md
-
+build.yml
 # 本地数据和日志
 data/
 logs/

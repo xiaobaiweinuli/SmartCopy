@@ -11,6 +11,10 @@ on:
         required: true
         default: '1.0.0'
 
+permissions:
+  contents: write
+  actions: read
+
 jobs:
   build:
     runs-on: windows-latest
@@ -45,22 +49,29 @@ jobs:
           $sourceDir = "build\windows\x64\runner\Release"
           $stagingDir = "release\$packageName"
           
-          # 创建临时目录，先复制进去
+          # 确保目录存在
+          if (Test-Path "release") { Remove-Item -Recurse -Force "release" }
           New-Item -ItemType Directory -Path $stagingDir -Force
+          
+          # 复制文件
           Copy-Item -Path "$sourceDir\*" -Destination $stagingDir -Recurse
           
-          # 创建 ZIP 压缩包 - 从 staging 目录压缩，确保包内结构正确
+          # 创建 ZIP 压缩包
           $zipPath = "release\${packageName}.zip"
           Compress-Archive -Path "$stagingDir\*" -DestinationPath $zipPath -Force
+          
+          # 调试：列出 release 目录内容
+          Write-Host "Release directory contents:"
+          Get-ChildItem -Path "release" -Recurse
           
           echo "package_path=$zipPath" >> $env:GITHUB_OUTPUT
           echo "package_name=${packageName}.zip" >> $env:GITHUB_OUTPUT
           echo "version=$version" >> $env:GITHUB_OUTPUT
 
       - name: Create GitHub Release
-        uses: softprops/action-gh-release@v1
+        uses: softprops/action-gh-release@v2
         with:
-          files: ${{ steps.prepare.outputs.package_path }}
+          files: release/*.zip
           name: SmartCopy ${{ steps.prepare.outputs.version }}
           tag_name: ${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || format('v{0}', github.event.inputs.version) }}
           draft: false
