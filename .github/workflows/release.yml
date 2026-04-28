@@ -32,11 +32,8 @@ jobs:
       - name: Get dependencies
         run: flutter pub get
 
-      - name: Build Windows app
-        run: flutter build windows --release
-
-      - name: Prepare release package
-        id: prepare
+      - name: Prepare version
+        id: version
         shell: pwsh
         run: |
           # 获取版本号：tag 触发时从 tag 提取，手动触发时使用输入参数
@@ -45,6 +42,33 @@ jobs:
           } else { 
             '${{ github.event.inputs.version }}' 
           }
+          
+          # 解析版本号（如 1.0.0 拆分为 build-name 和 build-number）
+          $versionParts = $version -split '\.', 3
+          $major = [int]($versionParts[0] ?? '1')
+          $minor = [int]($versionParts[1] ?? '0')
+          $patch = [int](($versionParts[2] ?? '0') -split '\+' | Select-Object -First 1)
+          
+          # build-name 是主版本号（如 1.0.0），build-number 是整数（计算为 major*10000 + minor*100 + patch）
+          $buildName = "$major.$minor.$patch"
+          $buildNumber = $major * 10000 + $minor * 100 + $patch
+          
+          Write-Host "Version: $version"
+          Write-Host "Build name: $buildName"
+          Write-Host "Build number: $buildNumber"
+          
+          echo "version=$version" >> $env:GITHUB_OUTPUT
+          echo "build_name=$buildName" >> $env:GITHUB_OUTPUT
+          echo "build_number=$buildNumber" >> $env:GITHUB_OUTPUT
+
+      - name: Build Windows app
+        run: flutter build windows --release --build-name ${{ steps.version.outputs.build_name }} --build-number ${{ steps.version.outputs.build_number }}
+
+      - name: Prepare release package
+        id: prepare
+        shell: pwsh
+        run: |
+          $version = '${{ steps.version.outputs.version }}'
           $packageName = "SmartCopy_${version}_Windows_x64"
           $sourceDir = "build\windows\x64\runner\Release"
           $stagingDir = "release\$packageName"
