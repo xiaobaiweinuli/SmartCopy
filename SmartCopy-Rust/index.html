@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <link rel="stylesheet" href="/src/styles.css" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SmartCopy - 智能复制</title>
+  <script type="module" src="/src/main.ts" defer></script>
+</head>
+<body>
+  <div id="app">
+    <header class="header">
+      <div class="header-title">
+        <span class="logo">📁</span>
+        <h1>SmartCopy</h1>
+      </div>
+      <nav class="nav-tabs">
+        <button class="nav-tab active" data-tab="home">复制</button>
+        <button class="nav-tab" data-tab="profiles">配置</button>
+        <button class="nav-tab" data-tab="rules">规则</button>
+        <button class="nav-tab" data-tab="settings">设置</button>
+      </nav>
+    </header>
+
+    <main class="main-content">
+      <!-- 复制页面 -->
+      <section id="page-home" class="page active">
+        <div class="copy-section">
+          <div class="source-section">
+            <h2>复制源</h2>
+            <div class="input-group">
+              <input type="text" id="source-path" placeholder="点击按钮选择文件或文件夹..." readonly />
+              <button id="btn-select-source" class="btn btn-primary">选择源</button>
+            </div>
+            <div class="source-info" id="source-info"></div>
+          </div>
+
+          <div class="arrow-section">
+            <span class="arrow">→</span>
+          </div>
+
+          <div class="dest-section">
+            <h2>目标位置</h2>
+            <div class="input-group">
+              <input type="text" id="dest-path" placeholder="点击按钮选择目标文件夹..." readonly />
+              <button id="btn-select-dest" class="btn btn-primary">选择目标</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="action-section">
+          <div class="conflict-resolution">
+            <label>冲突处理：</label>
+            <select id="conflict-resolution">
+              <option value="keep_newer">保留较新</option>
+              <option value="skip">跳过已存在</option>
+              <option value="overwrite">覆盖全部</option>
+            </select>
+          </div>
+          <button id="btn-start-copy" class="btn btn-success btn-large">开始复制</button>
+          <button id="btn-cancel-copy" class="btn btn-danger btn-large" disabled>取消</button>
+        </div>
+
+        <div class="progress-section" id="progress-section" style="display: none;">
+          <div class="progress-info">
+            <span id="current-file">正在复制: -</span>
+            <span id="progress-percent">0%</span>
+          </div>
+          <div class="progress-bar">
+            <div class="progress-fill" id="progress-fill"></div>
+          </div>
+          <div class="progress-stats">
+            <span id="stats-copied">已复制: 0</span>
+            <span id="stats-speed">速度: -</span>
+            <span id="stats-remaining">剩余: -</span>
+          </div>
+        </div>
+
+        <div class="result-section" id="result-section" style="display: none;">
+          <div class="result-card" id="result-card"></div>
+          <button id="btn-clear-result" class="btn btn-secondary">清除结果</button>
+        </div>
+      </section>
+
+      <!-- 配置页面 -->
+      <section id="page-profiles" class="page">
+        <div class="page-header">
+          <h2>文件夹配置</h2>
+          <button id="btn-add-profile" class="btn btn-primary">添加配置</button>
+        </div>
+        <div class="profiles-list" id="profiles-list"></div>
+      </section>
+
+      <!-- 规则页面 -->
+      <section id="page-rules" class="page">
+        <div class="rules-section">
+          <div class="rules-header">
+            <h2>全局黑名单规则</h2>
+            <button id="btn-import-gitignore" class="btn btn-secondary">从 .gitignore 导入</button>
+          </div>
+          
+          <div class="rules-category">
+            <h3>排除文件夹</h3>
+            <div class="rule-tags" id="folder-rules"></div>
+            <div class="add-rule">
+              <input type="text" id="new-folder-rule" placeholder="输入文件夹名或模式..." />
+              <button id="btn-add-folder-rule" class="btn btn-small">添加</button>
+            </div>
+          </div>
+
+          <div class="rules-category">
+            <h3>排除文件</h3>
+            <div class="rule-tags" id="file-rules"></div>
+            <div class="add-rule">
+              <input type="text" id="new-file-rule" placeholder="输入文件名或模式（如 *.log）..." />
+              <button id="btn-add-file-rule" class="btn btn-small">添加</button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- 设置页面 -->
+      <section id="page-settings" class="page">
+        <div class="settings-section">
+          <h2>快捷键设置</h2>
+          <div class="setting-item">
+            <label>标记复制源 (Ctrl+Shift+C):</label>
+            <span class="hotkey-display" id="hotkey-copy">Ctrl + Shift + C</span>
+          </div>
+          <div class="setting-item">
+            <label>智能粘贴 (Ctrl+Shift+V):</label>
+            <span class="hotkey-display" id="hotkey-paste">Ctrl + Shift + V</span>
+          </div>
+
+          <h2>常规设置</h2>
+          <div class="setting-item">
+            <label>开机自启</label>
+            <input type="checkbox" id="setting-auto-start" />
+          </div>
+          <div class="setting-item">
+            <label>最小化到托盘</label>
+            <input type="checkbox" id="setting-minimize-tray" checked />
+          </div>
+          <div class="setting-item">
+            <label>显示通知</label>
+            <input type="checkbox" id="setting-notifications" checked />
+          </div>
+          <div class="setting-item">
+            <label>合并全局规则</label>
+            <input type="checkbox" id="setting-merge-rules" checked />
+          </div>
+
+          <div class="setting-item">
+            <label>Robocopy 线程数:</label>
+            <input type="number" id="setting-threads" min="1" max="128" value="8" />
+          </div>
+
+          <div class="setting-item">
+            <label>右键菜单集成</label>
+            <button id="btn-toggle-context-menu" class="btn btn-secondary">注册右键菜单</button>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <footer class="footer">
+      <span id="status-text">就绪</span>
+      <span>v1.0.0 Rust Edition</span>
+    </footer>
+  </div>
+
+  <!-- 添加配置弹窗 -->
+  <div id="profile-modal" class="modal" style="display: none;">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h3>添加文件夹配置</h3>
+        <button class="modal-close" onclick="closeProfileModal()">×</button>
+      </div>
+      <div class="modal-body">
+        <div class="form-group">
+          <label>配置名称:</label>
+          <input type="text" id="profile-name" placeholder="例如: Node.js 项目" />
+        </div>
+        <div class="form-group">
+          <label>文件夹路径:</label>
+          <input type="text" id="profile-path" placeholder="选择文件夹..." readonly />
+          <button id="btn-browse-profile-path" class="btn btn-small">浏览</button>
+        </div>
+        <div class="form-group">
+          <label>排除文件夹 (每行一个):</label>
+          <textarea id="profile-folders" rows="4" placeholder="node_modules&#10;.git&#10;dist"></textarea>
+        </div>
+        <div class="form-group">
+          <label>排除文件 (每行一个):</label>
+          <textarea id="profile-files" rows="4" placeholder="*.log&#10;*.tmp"></textarea>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" onclick="closeProfileModal()">取消</button>
+        <button id="btn-save-profile" class="btn btn-primary">保存</button>
+      </div>
+    </div>
+  </div>
+</body>
+</html>
