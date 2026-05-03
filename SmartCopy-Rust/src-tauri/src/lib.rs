@@ -6,7 +6,7 @@ use crate::models::{
 };
 use crate::services::{
     CopyEngine, StorageService, logger_service,
-    HotkeyService, RegistryService, ClipboardService,
+    HotkeyService, RegistryService, ClipboardService, TrayService,
     HotkeyAction,
 };
 
@@ -353,6 +353,7 @@ pub fn run() {
         ])
         .setup(|app| {
             logger_service::log_info("Main", "Tauri 应用已初始化");
+            TrayService::setup(app);
             Ok(())
         });
 
