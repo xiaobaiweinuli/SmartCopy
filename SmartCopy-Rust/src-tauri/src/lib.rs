@@ -1,17 +1,23 @@
-use std::sync::Mutex;
-use tauri::{AppHandle, Manager, State};
+use std::sync::{Arc, Mutex};
+use tauri::{AppHandle, Manager, State, Emitter};
 use crate::models::{
     AppSettings, CopyTask, CopyStatus, ConflictResolution,
     ScanResult, FolderProfile,
 };
-use crate::services::{CopyEngine, StorageService, logger_service};
+use crate::services::{
+    CopyEngine, StorageService, logger_service,
+    HotkeyService, RegistryService, ClipboardService,
+    HotkeyAction,
+};
 
 pub struct AppState {
     pub copy_engine: CopyEngine,
+    pub hotkey_service: Mutex<HotkeyService>,
+    pub registry_service: RegistryService,
+    pub clipboard_service: ClipboardService,
     pub settings: Mutex<AppSettings>,
     pub profiles: Mutex<Vec<FolderProfile>>,
     pub copy_source: Mutex<Option<String>>,
-    pub active_task: Mutex<Option<CopyTask>>,
 }
 
 impl AppState {
@@ -21,10 +27,12 @@ impl AppState {
 
         Self {
             copy_engine: CopyEngine::new(),
+            hotkey_service: Mutex::new(HotkeyService::new()),
+            registry_service: RegistryService::new(),
+            clipboard_service: ClipboardService::new(),
             settings: Mutex::new(settings),
             profiles: Mutex::new(profiles),
             copy_source: Mutex::new(None),
-            active_task: Mutex::new(None),
         }
     }
 }
@@ -36,12 +44,12 @@ impl Default for AppState {
 }
 
 #[tauri::command]
-pub fn get_settings(state: State<'_, AppState>) -> AppSettings {
+fn get_settings(state: State<'_, AppState>) -> AppSettings {
     state.settings.lock().unwrap().clone()
 }
 
 #[tauri::command]
-pub fn save_settings(state: State<'_, AppState>, settings: AppSettings) -> Result<(), String> {
+fn save_settings(state: State<'_, AppState>, settings: AppSettings) -> Result<(), String> {
     StorageService::save_settings(&settings)
         .map_err(|e| e.to_string())?;
     *state.settings.lock().unwrap() = settings;
@@ -49,12 +57,12 @@ pub fn save_settings(state: State<'_, AppState>, settings: AppSettings) -> Resul
 }
 
 #[tauri::command]
-pub fn get_profiles(state: State<'_, AppState>) -> Vec<FolderProfile> {
+fn get_profiles(state: State<'_, AppState>) -> Vec<FolderProfile> {
     state.profiles.lock().unwrap().clone()
 }
 
 #[tauri::command]
-pub fn add_profile(state: State<'_, AppState>, profile: FolderProfile) -> Result<FolderProfile, String> {
+fn add_profile(state: State<'_, AppState>, profile: FolderProfile) -> Result<FolderProfile, String> {
     let mut profiles = state.profiles.lock().unwrap();
     let new_profile = FolderProfile {
         id: uuid::Uuid::new_v4().to_string(),
@@ -67,7 +75,7 @@ pub fn add_profile(state: State<'_, AppState>, profile: FolderProfile) -> Result
 }
 
 #[tauri::command]
-pub fn update_profile(state: State<'_, AppState>, profile: FolderProfile) -> Result<(), String> {
+fn update_profile(state: State<'_, AppState>, profile: FolderProfile) -> Result<(), String> {
     let mut profiles = state.profiles.lock().unwrap();
     if let Some(pos) = profiles.iter().position(|p| p.id == profile.id) {
         profiles[pos] = profile;
@@ -78,7 +86,7 @@ pub fn update_profile(state: State<'_, AppState>, profile: FolderProfile) -> Res
 }
 
 #[tauri::command]
-pub fn delete_profile(state: State<'_, AppState>, id: String) -> Result<(), String> {
+fn delete_profile(state: State<'_, AppState>, id: String) -> Result<(), String> {
     let mut profiles = state.profiles.lock().unwrap();
     profiles.retain(|p| p.id != id);
     StorageService::save_profiles(&profiles)
@@ -87,23 +95,23 @@ pub fn delete_profile(state: State<'_, AppState>, id: String) -> Result<(), Stri
 }
 
 #[tauri::command]
-pub fn set_copy_source(state: State<'_, AppState>, path: String) {
+fn set_copy_source(state: State<'_, AppState>, path: String) {
     logger_service::log_info("App", &format!("已标记复制源: {}", path));
     *state.copy_source.lock().unwrap() = Some(path);
 }
 
 #[tauri::command]
-pub fn clear_copy_source(state: State<'_, AppState>) {
+fn clear_copy_source(state: State<'_, AppState>) {
     *state.copy_source.lock().unwrap() = None;
 }
 
 #[tauri::command]
-pub fn get_copy_source(state: State<'_, AppState>) -> Option<String> {
+fn get_copy_source(state: State<'_, AppState>) -> Option<String> {
     state.copy_source.lock().unwrap().clone()
 }
 
 #[tauri::command]
-pub async fn scan_source(
+async fn scan_source(
     state: State<'_, AppState>,
     source_path: String,
     dest_path: String,
@@ -148,7 +156,7 @@ pub async fn scan_source(
 }
 
 #[tauri::command]
-pub async fn execute_copy(
+async fn execute_copy(
     state: State<'_, AppState>,
     dest_path: String,
     resolution: Option<ConflictResolution>,
@@ -184,27 +192,27 @@ pub async fn execute_copy(
 }
 
 #[tauri::command]
-pub fn cancel_copy(state: State<'_, AppState>) {
+fn cancel_copy(state: State<'_, AppState>) {
     state.copy_engine.cancel();
 }
 
 #[tauri::command]
-pub fn get_task_history() -> Result<Vec<CopyTask>, String> {
+fn get_task_history() -> Result<Vec<CopyTask>, String> {
     StorageService::load_task_history().map_err(|e| e.to_string())
 }
 
 #[tauri::command]
-pub fn clear_task_history() -> Result<(), String> {
+fn clear_task_history() -> Result<(), String> {
     StorageService::clear_task_history().map_err(|e| e.to_string())
 }
 
 #[tauri::command]
-pub fn get_data_directory() -> String {
+fn get_data_directory() -> String {
     StorageService::get_data_dir_string()
 }
 
 #[tauri::command]
-pub fn import_from_gitignore(state: State<'_, AppState>, content: String) -> Result<usize, String> {
+fn import_from_gitignore(state: State<'_, AppState>, content: String) -> Result<usize, String> {
     let mut settings = state.settings.lock().unwrap();
     let mut added = 0;
 
@@ -239,6 +247,74 @@ pub fn import_from_gitignore(state: State<'_, AppState>, content: String) -> Res
     Ok(added)
 }
 
+#[tauri::command]
+fn get_clipboard_files(state: State<'_, AppState>) -> Result<Vec<String>, String> {
+    state.clipboard_service.get_files_from_clipboard()
+}
+
+#[tauri::command]
+fn register_context_menu(state: State<'_, AppState>) -> Result<(), String> {
+    let exe_path = std::env::current_exe()
+        .map_err(|e| e.to_string())?
+        .to_string_lossy()
+        .to_string();
+
+    state.registry_service.register_context_menu(&exe_path)?;
+
+    let mut settings = state.settings.lock().unwrap();
+    settings.right_click_menu_enabled = true;
+    StorageService::save_settings(&settings).map_err(|e| e.to_string())?;
+
+    Ok(())
+}
+
+#[tauri::command]
+fn unregister_context_menu(state: State<'_, AppState>) -> Result<(), String> {
+    state.registry_service.unregister_context_menu()?;
+
+    let mut settings = state.settings.lock().unwrap();
+    settings.right_click_menu_enabled = false;
+    StorageService::save_settings(&settings).map_err(|e| e.to_string())?;
+
+    Ok(())
+}
+
+#[tauri::command]
+fn is_context_menu_registered(state: State<'_, AppState>) -> bool {
+    state.registry_service.is_registered()
+}
+
+#[tauri::command]
+fn set_auto_start(state: State<'_, AppState>, enabled: bool) -> Result<(), String> {
+    let exe_path = std::env::current_exe()
+        .map_err(|e| e.to_string())?
+        .to_string_lossy()
+        .to_string();
+
+    state.registry_service.set_auto_start(enabled, &exe_path)?;
+
+    let mut settings = state.settings.lock().unwrap();
+    settings.auto_start = enabled;
+    StorageService::save_settings(&settings).map_err(|e| e.to_string())?;
+
+    Ok(())
+}
+
+#[tauri::command]
+fn is_auto_start_enabled(state: State<'_, AppState>) -> bool {
+    state.registry_service.is_auto_start_enabled()
+}
+
+#[tauri::command]
+fn smart_copy_from_explorer(state: State<'_, AppState>) -> Result<Option<String>, String> {
+    state.clipboard_service.get_primary_file_or_folder()
+}
+
+#[tauri::command]
+fn get_explorer_path(state: State<'_, AppState>) -> Result<Option<String>, String> {
+    state.clipboard_service.get_explorer_current_path()
+}
+
 pub fn run() {
     if let Err(e) = logger_service::init_logger() {
         eprintln!("初始化日志系统失败: {}", e);
@@ -266,6 +342,14 @@ pub fn run() {
             clear_task_history,
             get_data_directory,
             import_from_gitignore,
+            get_clipboard_files,
+            register_context_menu,
+            unregister_context_menu,
+            is_context_menu_registered,
+            set_auto_start,
+            is_auto_start_enabled,
+            smart_copy_from_explorer,
+            get_explorer_path,
         ])
         .setup(|app| {
             logger_service::log_info("Main", "Tauri 应用已初始化");

@@ -1,5 +1,4 @@
 import { invoke } from "@tauri-apps/api/core";
-import { open } from "@tauri-apps/plugin-dialog";
 
 interface AppSettings {
   smart_copy_hotkey: { key: string; ctrl: boolean; shift: boolean; alt: boolean };
@@ -89,6 +88,7 @@ async function loadSettings() {
     currentSettings = await invoke<AppSettings>("get_settings");
     renderRules();
     renderSettings();
+    await checkContextMenuStatus();
   } catch (error) {
     console.error("加载设置失败:", error);
     updateStatus("加载设置失败");
@@ -109,7 +109,7 @@ async function loadCopySource() {
     copySource = await invoke<string | null>("get_copy_source");
     if (copySource) {
       document.getElementById("source-path")!.value = copySource;
-      updateSourceInfo();
+      await updateSourceInfo();
     }
   } catch (error) {
     console.error("获取复制源失败:", error);
@@ -172,7 +172,7 @@ function renderProfiles() {
     .join("");
 }
 
-function renderSettings() {
+async function renderSettings() {
   if (!currentSettings) return;
 
   document.getElementById("hotkey-copy")!.textContent =
@@ -186,6 +186,17 @@ function renderSettings() {
   (document.getElementById("setting-notifications") as HTMLInputElement).checked = currentSettings.show_notifications;
   (document.getElementById("setting-merge-rules") as HTMLInputElement).checked = currentSettings.merge_global_rules;
   (document.getElementById("setting-threads") as HTMLInputElement).value = String(currentSettings.robocopy_threads);
+}
+
+async function checkContextMenuStatus() {
+  try {
+    const isRegistered = await invoke<boolean>("is_context_menu_registered");
+    const btn = document.getElementById("btn-toggle-context-menu")!;
+    btn.textContent = isRegistered ? "取消右键菜单" : "注册右键菜单";
+    btn.className = isRegistered ? "btn btn-danger" : "btn btn-secondary";
+  } catch (error) {
+    console.error("检查右键菜单状态失败:", error);
+  }
 }
 
 function escapeHtml(text: string): string {
@@ -519,16 +530,22 @@ async function importGitignore() {
 async function toggleContextMenu() {
   if (!currentSettings) return;
 
-  currentSettings.right_click_menu_enabled = !currentSettings.right_click_menu_enabled;
-  await saveSettings();
+  try {
+    const isRegistered = await invoke<boolean>("is_context_menu_registered");
 
-  const btn = document.getElementById("btn-toggle-context-menu")!;
-  btn.textContent = currentSettings.right_click_menu_enabled
-    ? "取消右键菜单"
-    : "注册右键菜单";
-  btn.className = currentSettings.right_click_menu_enabled
-    ? "btn btn-danger"
-    : "btn btn-secondary";
+    if (isRegistered) {
+      await invoke("unregister_context_menu");
+      updateStatus("右键菜单已注销");
+    } else {
+      await invoke("register_context_menu");
+      updateStatus("右键菜单已注册");
+    }
+
+    await checkContextMenuStatus();
+  } catch (error) {
+    console.error("切换右键菜单失败:", error);
+    updateStatus(`操作失败: ${error}`);
+  }
 }
 
 function switchTab(tabName: string) {
@@ -576,9 +593,11 @@ function initEventListeners() {
   });
 
   document.getElementById("setting-auto-start")?.addEventListener("change", async (e) => {
-    if (currentSettings) {
-      currentSettings.auto_start = (e.target as HTMLInputElement).checked;
-      await saveSettings();
+    try {
+      await invoke("set_auto_start", { enabled: (e.target as HTMLInputElement).checked });
+      updateStatus("开机自启设置已保存");
+    } catch (error) {
+      console.error("设置开机自启失败:", error);
     }
   });
 
