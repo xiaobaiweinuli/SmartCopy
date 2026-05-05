@@ -120,7 +120,7 @@ impl CopyTask {
             total_files: 0,
             copied_files: 0,
             skipped_files: 0,
-            failed_files: usize,
+            failed_files: 0,
             current_file: None,
             error_message: None,
             started_at: Utc::now(),

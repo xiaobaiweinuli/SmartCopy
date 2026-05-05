@@ -285,6 +285,18 @@ fn is_context_menu_registered(state: State<'_, AppState>) -> bool {
 }
 
 #[tauri::command]
+fn toggle_right_click_menu(state: State<'_, AppState>) -> Result<bool, String> {
+    let is_registered = state.registry_service.is_registered();
+    if is_registered {
+        unregister_context_menu(state)?;
+        Ok(false)
+    } else {
+        register_context_menu(state)?;
+        Ok(true)
+    }
+}
+
+#[tauri::command]
 fn set_auto_start(state: State<'_, AppState>, enabled: bool) -> Result<(), String> {
     let exe_path = std::env::current_exe()
         .map_err(|e| e.to_string())?
@@ -346,6 +358,7 @@ pub fn run() {
             register_context_menu,
             unregister_context_menu,
             is_context_menu_registered,
+            toggle_right_click_menu,
             set_auto_start,
             is_auto_start_enabled,
             smart_copy_from_explorer,
